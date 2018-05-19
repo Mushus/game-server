@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/labstack/echo"
+	"github.com/labstack/echo/middleware"
 )
 
 var (
@@ -23,11 +24,14 @@ func main() {
 	}()
 
 	e := echo.New()
+	e.Use(middleware.CORS())
+	//e.use(middleware.CORSWithConfig(middleware.DefaultCORSConfig))
 	e.GET("/:gameID", ShowRobby)
 	e.POST("/:gameID/room", CreateRoom)
-	e.GET("/:gameID/:roomID", ShowRoom)
+	e.OPTIONS("/:gameID/room", CreateRoom)
+	e.GET("/:gameID/room/:roomID", ShowRoom)
 
-	e.Logger.Fatal(e.Start(":8080"))
+	e.Logger.Fatal(e.Start(":8090"))
 }
 
 func RoomManagement() {
