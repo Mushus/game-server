@@ -8,34 +8,63 @@ import (
 
 // ========================================
 
+// Repository サーバーの状態を管理するところ
 type Repository interface {
-	GetRobby(gameID string) Robby
+	GetRobby(robbyID string) Robby
 }
 
+// Robby ゲームロビー
 type Robby interface {
 	ToView() RobbyView
 	GetRoom(roomID string) Room
 	GetRoomViews() []RoomView
 	CreateRoom(name string, password string, maxUser int, isAutoMatching bool) Room
+	CreateParty(name string, password string, isPrivate bool, maxUsers int) Party
+	Listen(lrf ListenRobbyFunc) (close func())
 }
 
+// Room マッチングするための部屋
 type Room interface {
 	ToView() RoomView
+	CanJoin() bool
+	Leave()
+	Join()
+}
+
+// Party 人の集まり
+type Party interface {
+	ToView() PartyView
+	Join() func()
 }
 
 // ========================================
 
-// Repository 部屋情報
+// ListenRobbyFunc イベント
+type ListenRobbyFunc func(robby Robby)
+
+// ========================================
+
 type repository struct {
 	// 部屋情報
 	robby map[string]robby
 	mu    *sync.RWMutex
 }
 
-// GameRobby 部屋一覧
 type robby struct {
-	rooms map[string]room
-	mu    *sync.RWMutex
+	rooms    map[string]room
+	party    map[string]party
+	listener map[*ListenRobbyFunc]struct{}
+	mu       *sync.RWMutex
+}
+
+type party struct {
+	id        string
+	name      string
+	password  string
+	isPrivate bool
+	maxUsers  int
+	userCount int
+	mu        *sync.RWMutex
 }
 
 type room struct {
@@ -43,6 +72,7 @@ type room struct {
 	name           string
 	password       string
 	maxUsers       int
+	usersCount     int
 	isAutoMatching bool
 	mu             *sync.RWMutex
 }
@@ -58,25 +88,41 @@ type RobbyView struct {
 // RoomView 部屋
 type RoomView struct {
 	ID string `json:"id"`
-	// Name　部屋名
+	// Name 部屋名
 	Name string `json:"name"`
-	// Password　パスワード
-	HasPassword bool `json:"has_passwrod"`
+	// Password パスワード
+	HasPassword bool `json:"hasPasswrod"`
+	// MaxUsers ユーザー数
+	MaxUsers int `json:"maxUsers"`
+	// IsAutoMatching オートマッチング対応
+	IsAutoMatching bool `json:"isAutoMatching"`
+}
+
+// PartyView パーティ
+type PartyView struct {
+	ID string `json:"id"`
+	// Name パーティ名
+	Name string `json:"name"`
+	// Password パスワード
+	HasPassword bool `json:"hasPasswrod"`
+	// プライベートパーティかどうか
+	// ロビーから不可視になります
+	isPrivate bool `json:"isPrivate"`
 	// MaxUsers　ユーザー数
-	MaxUser int `json:"max_user"`
-	// IsAutoMatching　オートマッチング対応
-	IsAutoMatching bool `json:"is_auto_matching"`
+	MaxUsers  int `json:"maxUsers"`
+	UserCount int `json:"maxUsers"`
 }
 
 // ========================================
 
 // NewRepository リポジトリを初期化する
-func NewRepository(gameIDs []string) Repository {
+func NewRepository(robbyIDs []string) Repository {
 	rby := map[string]robby{}
-	for _, v := range gameIDs {
+	for _, v := range robbyIDs {
 		rby[v] = robby{
-			rooms: map[string]room{},
-			mu:    &sync.RWMutex{},
+			rooms:    map[string]room{},
+			listener: map[*ListenRobbyFunc]struct{}{},
+			mu:       &sync.RWMutex{},
 		}
 	}
 
@@ -87,11 +133,11 @@ func NewRepository(gameIDs []string) Repository {
 }
 
 // GetRobby 部屋情報を取得する
-func (r *repository) GetRobby(gameID string) Robby {
+func (r *repository) GetRobby(robbyID string) Robby {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	robby, ok := r.robby[gameID]
+	robby, ok := r.robby[robbyID]
 	if !ok {
 		return nil
 	}
@@ -160,6 +206,36 @@ func (r *robby) CreateRoom(name string, password string, maxUser int, isAutoMatc
 	return &room
 }
 
+func (r *robby) CreateParty(name string, password string, isPrivate bool, maxUsers int) Party {
+	partyID := uuid.NewV4().String()
+
+	party := party{
+		id:        partyID,
+		name:      name,
+		password:  password,
+		isPrivate: isPrivate,
+		maxUsers:  maxUsers,
+		userCount: 0,
+		mu:        &sync.RWMutex{},
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.party[partyID] = party
+	return &party
+}
+
+// ロビーの状況を購読する
+func (r *robby) Listen(lrf ListenRobbyFunc) (close func()) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.listener[&lrf] = struct{}{}
+	return func() {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		delete(r.listener, &lrf)
+	}
+}
+
 // ========================================
 
 func (r *room) ToView() RoomView {
@@ -169,7 +245,51 @@ func (r *room) ToView() RoomView {
 		ID:             r.id,
 		Name:           r.name,
 		HasPassword:    r.password != "",
-		MaxUser:        r.maxUsers,
+		MaxUsers:       r.maxUsers,
 		IsAutoMatching: r.isAutoMatching,
+	}
+}
+
+func (r *room) CanJoin() bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.maxUsers >= r.usersCount || r.usersCount <= 0
+}
+
+func (r *room) Join() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.usersCount++
+}
+
+func (r *room) Leave() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.usersCount--
+}
+
+// ========================================
+
+func (p *party) ToView() PartyView {
+	p.mu.RLock()
+	defer p.mu.Lock()
+	return PartyView{
+		ID:          p.id,
+		Name:        p.name,
+		HasPassword: p.password != "",
+		isPrivate:   p.isPrivate,
+		MaxUsers:    p.maxUsers,
+		UserCount:   0,
+	}
+}
+
+func (p *party) Join() func() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.userCount++
+	return func() {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		p.userCount--
 	}
 }
