@@ -19,7 +19,7 @@ type Robby interface {
 	GetRoom(roomID string) Room
 	GetRoomViews() []RoomView
 	CreateRoom(name string, password string, maxUser int, isAutoMatching bool) Room
-	CreateParty(name string, password string, isPrivate bool, maxUsers int) Party
+	CreateParty(isPrivate bool, maxUsers int) Party
 	Listen(lrf ListenRobbyFunc) (close func())
 }
 
@@ -59,8 +59,6 @@ type robby struct {
 
 type party struct {
 	id        string
-	name      string
-	password  string
 	isPrivate bool
 	maxUsers  int
 	userCount int
@@ -102,15 +100,11 @@ type RoomView struct {
 type PartyView struct {
 	ID string `json:"id"`
 	// Name パーティ名
-	Name string `json:"name"`
-	// Password パスワード
-	HasPassword bool `json:"hasPasswrod"`
 	// プライベートパーティかどうか
-	// ロビーから不可視になります
-	isPrivate bool `json:"isPrivate"`
+	IsPrivate bool `json:"isPrivate"`
 	// MaxUsers　ユーザー数
 	MaxUsers  int `json:"maxUsers"`
-	UserCount int `json:"maxUsers"`
+	UserCount int `json:"userCount"`
 }
 
 // ========================================
@@ -121,6 +115,7 @@ func NewRepository(robbyIDs []string) Repository {
 	for _, v := range robbyIDs {
 		rby[v] = robby{
 			rooms:    map[string]room{},
+			party:    map[string]party{},
 			listener: map[*ListenRobbyFunc]struct{}{},
 			mu:       &sync.RWMutex{},
 		}
@@ -206,13 +201,11 @@ func (r *robby) CreateRoom(name string, password string, maxUser int, isAutoMatc
 	return &room
 }
 
-func (r *robby) CreateParty(name string, password string, isPrivate bool, maxUsers int) Party {
+func (r *robby) CreateParty(isPrivate bool, maxUsers int) Party {
 	partyID := uuid.NewV4().String()
 
 	party := party{
 		id:        partyID,
-		name:      name,
-		password:  password,
 		isPrivate: isPrivate,
 		maxUsers:  maxUsers,
 		userCount: 0,
@@ -272,14 +265,12 @@ func (r *room) Leave() {
 
 func (p *party) ToView() PartyView {
 	p.mu.RLock()
-	defer p.mu.Lock()
+	defer p.mu.RUnlock()
 	return PartyView{
-		ID:          p.id,
-		Name:        p.name,
-		HasPassword: p.password != "",
-		isPrivate:   p.isPrivate,
-		MaxUsers:    p.maxUsers,
-		UserCount:   0,
+		ID:        p.id,
+		IsPrivate: p.isPrivate,
+		MaxUsers:  p.maxUsers,
+		UserCount: p.userCount,
 	}
 }
 

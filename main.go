@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -29,11 +30,6 @@ func main() {
 	e := echo.New()
 	e.Use(middleware.CORS())
 	e.GET("/:robbyID/matching", Matching)
-	//e.use(middleware.CORSWithConfig(middleware.DefaultCORSConfig))
-	e.GET("/:gameID", ShowRobby)
-	e.POST("/:gameID/room", CreateRoom)
-	e.GET("/:gameID/room/:roomID/join", JoinRoom)
-	e.GET("/:gameID/room/:roomID", ShowRoom)
 
 	e.Logger.Fatal(e.Start(":8090"))
 }
@@ -75,16 +71,33 @@ func Matching(c echo.Context) error {
 			var rsp interface{}
 			switch srp.Action {
 			case ReceiveActionCreateParty:
+				// パーティを作る
 				rsvPrm := ParamCreateParty{}
+				// パラメータが存在しない
+				if srp.Param == nil {
+					websocket.JSON.Send(ws, WebSocketResponse{
+						Action: ReceiveActionCreateParty,
+						Status: ResponseStatusNG,
+						Param: ErrorResponse{
+							Message: "invalid parameter",
+						},
+					})
+					continue
+				}
 				// NOTE: 既にパースされてるのでエラーの確認は不要のはず
 				json.Unmarshal(*srp.Param, &rsvPrm)
-				Close(closeRobby)
-				myParty = robby.CreateParty(rsvPrm.Name, rsvPrm.Password, rsvPrm.IsPrivate, rsvPrm.maxUsers)
-				closeRobby = myParty.Join()
-				rsp = myParty.ToView()
+				Close(partyClose)
+				myParty = robby.CreateParty(rsvPrm.IsPrivate, rsvPrm.maxUsers)
+				partyClose = myParty.Join()
+				rsp = WebSocketResponse{
+					Action: ReceiveActionCreateParty,
+					Status: ResponseStatusOK,
+					Param:  myParty.ToView(),
+				}
 			default:
 				continue
 			}
+			log.Printf("%#v", rsp)
 			err = websocket.JSON.Send(ws, rsp)
 			if err != nil {
 				fmt.Print("ended")
@@ -100,104 +113,4 @@ func Close(fn func()) {
 	if fn != nil {
 		fn()
 	}
-}
-
-// ShowRobby ルーム一覧を表示する
-func ShowRobby(c echo.Context) error {
-	gameID := c.Param("gameID")
-
-	robby := repo.GetRobby(gameID)
-	if robby == nil {
-		return c.String(http.StatusNotFound, "robby not found")
-	}
-
-	return c.JSON(http.StatusOK, robby.ToView())
-}
-
-// CreateRoom 部屋を作る
-func CreateRoom(c echo.Context) error {
-	gameID := c.Param("gameID")
-
-	rp := RoomParam{}
-	if err := c.Bind(&rp); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"message": "invalid room info",
-		})
-	}
-
-	robby := repo.GetRobby(gameID)
-	if robby == nil {
-		return c.JSON(http.StatusNotFound, map[string]interface{}{
-			"message": "game not found",
-		})
-	}
-
-	room := robby.CreateRoom(rp.Name, rp.Password, rp.MaxUsers, rp.IsAutoMatching)
-	return c.JSON(http.StatusOK, room.ToView())
-}
-
-// ShowRoom 部屋の詳細を表示する
-func ShowRoom(c echo.Context) error {
-	gameID := c.Param("gameID")
-	roomID := c.Param("roomID")
-
-	robby := repo.GetRobby(gameID)
-	if robby == nil {
-		return c.JSON(http.StatusNotFound, map[string]interface{}{
-			"message": "game not found",
-		})
-	}
-
-	room := robby.GetRoom(roomID)
-	if room == nil {
-		return c.JSON(http.StatusNotFound, map[string]interface{}{
-			"message": "room not found",
-		})
-	}
-
-	return c.JSON(http.StatusOK, room.ToView())
-}
-
-// JoinRoom 部屋に入る
-func JoinRoom(c echo.Context) error {
-	gameID := c.Param("gameID")
-	roomID := c.Param("roomID")
-
-	robby := repo.GetRobby(gameID)
-	if robby == nil {
-		return c.JSON(http.StatusNotFound, map[string]interface{}{
-			"message": "game not found",
-		})
-	}
-
-	room := robby.GetRoom(roomID)
-	if room == nil {
-		return c.JSON(http.StatusNotFound, map[string]interface{}{
-			"message": "room not found",
-		})
-	}
-
-	if !room.CanJoin() {
-		return c.JSON(http.StatusNotFound, map[string]interface{}{
-			"message": "cannot join this room",
-		})
-	}
-
-	room.Join()
-	websocket.Handler(func(ws *websocket.Conn) {
-		defer room.Leave()
-		defer ws.Close()
-		fmt.Printf("%v\n", ws.IsClientConn())
-		fmt.Printf("%v\n", ws.IsServerConn())
-		for {
-			err := websocket.JSON.Send(ws, map[string]interface{}{"message": "hello"})
-			if err != nil {
-				fmt.Print("ended")
-				return
-			}
-			time.Sleep(time.Second)
-		}
-		fmt.Print("hoge")
-	}).ServeHTTP(c.Response(), c.Request())
-	return nil
 }
