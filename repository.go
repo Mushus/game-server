@@ -53,7 +53,7 @@ type repository struct {
 
 type robby struct {
 	rooms    map[string]room
-	party    map[string]party
+	party    map[string]*party
 	listener map[*ListenRobbyFunc]struct{}
 	mu       *sync.RWMutex
 }
@@ -116,7 +116,7 @@ func NewRepository(robbyIDs []string) Repository {
 	for _, v := range robbyIDs {
 		rby[v] = robby{
 			rooms:    map[string]room{},
-			party:    map[string]party{},
+			party:    map[string]*party{},
 			listener: map[*ListenRobbyFunc]struct{}{},
 			mu:       &sync.RWMutex{},
 		}
@@ -205,7 +205,7 @@ func (r *robby) CreateRoom(name string, password string, maxUser int, isAutoMatc
 func (r *robby) CreateParty(isPrivate bool, maxUsers int) Party {
 	partyID := uuid.NewV4().String()
 
-	party := party{
+	party := &party{
 		id:        partyID,
 		isPrivate: isPrivate,
 		maxUsers:  maxUsers,
@@ -215,7 +215,7 @@ func (r *robby) CreateParty(isPrivate bool, maxUsers int) Party {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.party[partyID] = party
-	return &party
+	return party
 }
 
 // ロビーの状況を購読する
@@ -238,7 +238,7 @@ func (r *robby) GetParty(partID string) Party {
 	if !ok {
 		return nil
 	}
-	return &party
+	return party
 }
 
 // ========================================
