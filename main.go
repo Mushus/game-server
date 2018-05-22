@@ -23,7 +23,7 @@ func main() {
 	go func() {
 		for {
 			roomManagement()
-			time.Sleep(1000)
+			time.Sleep(time.Second)
 		}
 	}()
 
@@ -67,37 +67,44 @@ func Matching(c echo.Context) error {
 			if err != nil {
 				return
 			}
+			log.Printf("rq: %#v", srp)
 
-			var rsp interface{}
+			var rsp WebSocketResponse
 			switch srp.Action {
 			case ReceiveActionCreateParty:
 				// パーティを作る
 				rsvPrm := ParamCreateParty{}
 				// パラメータが存在しない
 				if srp.Param == nil {
-					websocket.JSON.Send(ws, WebSocketResponse{
-						Action: ReceiveActionCreateParty,
-						Status: ResponseStatusNG,
-						Param: ErrorResponse{
-							Message: "invalid parameter",
-						},
-					})
-					continue
+					rsp = InvalidParameterErrorResponse
+					break
 				}
 				// NOTE: 既にパースされてるのでエラーの確認は不要のはず
 				json.Unmarshal(*srp.Param, &rsvPrm)
 				Close(partyClose)
-				myParty = robby.CreateParty(rsvPrm.IsPrivate, rsvPrm.maxUsers)
+				myParty = robby.CreateParty(rsvPrm.IsPrivate, rsvPrm.MaxUsers)
 				partyClose = myParty.Join()
 				rsp = WebSocketResponse{
-					Action: ReceiveActionCreateParty,
 					Status: ResponseStatusOK,
 					Param:  myParty.ToView(),
+				}
+			case ReceiveActionGetParty:
+				rsvPrm := ParamGetParty{}
+				if srp.Param == nil {
+					rsp = InvalidParameterErrorResponse
+				}
+				json.Unmarshal(*srp.Param, &rsvPrm)
+				party := robby.GetParty(rsvPrm.PartyID)
+				rsp = WebSocketResponse{
+					Status: ResponseStatusOK,
+					Param:  party.ToView(),
 				}
 			default:
 				continue
 			}
-			log.Printf("%#v", rsp)
+			log.Printf("rs: %#v", rsp)
+			rsp.Action = srp.Action
+			rsp.ID = srp.ID
 			err = websocket.JSON.Send(ws, rsp)
 			if err != nil {
 				fmt.Print("ended")

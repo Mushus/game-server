@@ -20,6 +20,7 @@ type Robby interface {
 	GetRoomViews() []RoomView
 	CreateRoom(name string, password string, maxUser int, isAutoMatching bool) Room
 	CreateParty(isPrivate bool, maxUsers int) Party
+	GetParty(partID string) Party
 	Listen(lrf ListenRobbyFunc) (close func())
 }
 
@@ -227,6 +228,17 @@ func (r *robby) Listen(lrf ListenRobbyFunc) (close func()) {
 		defer r.mu.Unlock()
 		delete(r.listener, &lrf)
 	}
+}
+
+// GetParty パーティを取得する
+func (r *robby) GetParty(partID string) Party {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	party, ok := r.party[partID]
+	if !ok {
+		return nil
+	}
+	return &party
 }
 
 // ========================================
