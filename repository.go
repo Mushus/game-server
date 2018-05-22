@@ -19,7 +19,7 @@ type Robby interface {
 	GetRoom(roomID string) Room
 	GetRoomViews() []RoomView
 	CreateRoom(name string, password string, maxUser int, isAutoMatching bool) Room
-	CreateParty(isPrivate bool, maxUsers int) Party
+	CreateParty(ownerOffer string, isPrivate bool, maxUsers int) Party
 	GetParty(partID string) Party
 	Listen(lrf ListenRobbyFunc) (close func())
 }
@@ -59,11 +59,12 @@ type robby struct {
 }
 
 type party struct {
-	id        string
-	isPrivate bool
-	maxUsers  int
-	userCount int
-	mu        *sync.RWMutex
+	id         string
+	isPrivate  bool
+	maxUsers   int
+	userCount  int
+	ownerOffer string
+	mu         *sync.RWMutex
 }
 
 type room struct {
@@ -104,8 +105,9 @@ type PartyView struct {
 	// プライベートパーティかどうか
 	IsPrivate bool `json:"isPrivate"`
 	// MaxUsers　ユーザー数
-	MaxUsers  int `json:"maxUsers"`
-	UserCount int `json:"userCount"`
+	MaxUsers   int    `json:"maxUsers"`
+	UserCount  int    `json:"userCount"`
+	OwnerOffer string `json:"ownerOffer"`
 }
 
 // ========================================
@@ -202,15 +204,16 @@ func (r *robby) CreateRoom(name string, password string, maxUser int, isAutoMatc
 	return &room
 }
 
-func (r *robby) CreateParty(isPrivate bool, maxUsers int) Party {
+func (r *robby) CreateParty(ownerOffer string, isPrivate bool, maxUsers int) Party {
 	partyID := uuid.NewV4().String()
 
 	party := &party{
-		id:        partyID,
-		isPrivate: isPrivate,
-		maxUsers:  maxUsers,
-		userCount: 0,
-		mu:        &sync.RWMutex{},
+		id:         partyID,
+		ownerOffer: ownerOffer,
+		isPrivate:  isPrivate,
+		maxUsers:   maxUsers,
+		userCount:  0,
+		mu:         &sync.RWMutex{},
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -279,10 +282,11 @@ func (p *party) ToView() PartyView {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return PartyView{
-		ID:        p.id,
-		IsPrivate: p.isPrivate,
-		MaxUsers:  p.maxUsers,
-		UserCount: p.userCount,
+		ID:         p.id,
+		IsPrivate:  p.isPrivate,
+		MaxUsers:   p.maxUsers,
+		UserCount:  p.userCount,
+		OwnerOffer: p.ownerOffer,
 	}
 }
 

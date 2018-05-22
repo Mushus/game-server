@@ -26,6 +26,8 @@ type ParamSocketReceive struct {
 
 // ParamCreateParty パーティを作成する
 type ParamCreateParty struct {
+	// OwnerSdp WebRTC で接続する場合に必要な情報です
+	OwnerOffer string `json:"ownerOffer"`
 	// IsPrivate パーティに入れるかどうか
 	IsPrivate bool `json:"isPrivate"`
 	// maxUsers パーティの人数制限
@@ -38,9 +40,13 @@ type ParamGetParty struct {
 	PartyID string `json:"partyId"`
 }
 
+// ErrorResponse エラーレスポン
+// エラーの場合はこのjsonがパラメータとして返ります
 type ErrorResponse struct {
 	Message string `json:"message"`
 }
+
+// WebSocketResponse レスポンス
 type WebSocketResponse struct {
 	Action string                  `json:"action"`
 	Status WebScoketResponseStatus `json:"status"`
@@ -48,10 +54,13 @@ type WebSocketResponse struct {
 	Param  interface{}             `json:"param"`
 }
 
+// WebScoketResponseStatus レスポンスのステータス
 type WebScoketResponseStatus string
 
 const (
+	// ResponseStatusOK 成功
 	ResponseStatusOK WebScoketResponseStatus = "ok"
+	// ResponseStatusNG 失敗
 	ResponseStatusNG WebScoketResponseStatus = "ng"
 )
 
@@ -61,5 +70,13 @@ var InvalidParameterErrorResponse = WebSocketResponse{
 	Status: ResponseStatusNG,
 	Param: ErrorResponse{
 		Message: "invalid parameter",
+	},
+}
+
+var PartyNotFoundErrorResponse = WebSocketResponse{
+	Action: ReceiveActionCreateParty,
+	Status: ResponseStatusNG,
+	Param: ErrorResponse{
+		Message: "party not found",
 	},
 }

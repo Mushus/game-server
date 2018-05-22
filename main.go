@@ -82,7 +82,7 @@ func Matching(c echo.Context) error {
 				// NOTE: 既にパースされてるのでエラーの確認は不要のはず
 				json.Unmarshal(*srp.Param, &rsvPrm)
 				Close(partyClose)
-				myParty = robby.CreateParty(rsvPrm.IsPrivate, rsvPrm.MaxUsers)
+				myParty = robby.CreateParty(rsvPrm.OwnerOffer, rsvPrm.IsPrivate, rsvPrm.MaxUsers)
 				partyClose = myParty.Join()
 				rsp = WebSocketResponse{
 					Status: ResponseStatusOK,
@@ -95,6 +95,9 @@ func Matching(c echo.Context) error {
 				}
 				json.Unmarshal(*srp.Param, &rsvPrm)
 				party := robby.GetParty(rsvPrm.PartyID)
+				if party == nil {
+					rsp = PartyNotFoundErrorResponse
+				}
 				rsp = WebSocketResponse{
 					Status: ResponseStatusOK,
 					Param:  party.ToView(),
