@@ -19,6 +19,8 @@ const (
 	ReceiveActionGetParty = "get_party"
 	// ReceiveActionJoinPerty パーティに参加依頼する
 	ReceiveActionJoinPerty = "join_party"
+	// ReceiveActionLeaveParty パーティに参加依頼する
+	ReceiveActionLeaveParty = "leave_party"
 )
 
 // ParamSocketReceive ソケットの取得する形式

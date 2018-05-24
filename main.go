@@ -104,6 +104,11 @@ func Connect(srv server.Server) func(echo.Context) error {
 						User:    user,
 						PartyID: param.PartyID,
 					})
+				case ReceiveActionLeaveParty:
+					user.LeaveParty(server.LeavePartyRequest{
+						ID:   req.ID,
+						User: user,
+					})
 				}
 			}
 		}).ServeHTTP(c.Response(), c.Request())

@@ -19,7 +19,11 @@ const (
 	// ActionCreateParty 部屋を建てる
 	ActionCreateParty Action = "create_party"
 	// ActionJoinParty 部屋に参加する
-	ActionJoinParty Action = "join_perty"
+	ActionJoinParty Action = "join_party"
+	// ActionLeaveParty 部屋から退出した
+	ActionLeaveParty Action = "leave_party"
+	// ActionModifyParty 部屋が変更された
+	ActionModifyParty Action = "modify_party"
 	// ActionJoinRoom 部屋に参加
 	ActionJoinRoom Action = "join_party"
 	// ActionLeaveRoom 部屋から退席

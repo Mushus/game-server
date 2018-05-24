@@ -4,6 +4,7 @@ package server
 type Party interface {
 	GetID() string
 	Join(req JoinPartyRequest)
+	Leave(req LeavePartyRequest)
 	ToView() PartyView
 }
 
@@ -11,7 +12,7 @@ type party struct {
 	id        string
 	owner     User
 	join      chan JoinPartyRequest
-	leave     chan User
+	leave     chan LeavePartyRequest
 	users     map[User]struct{}
 	maxUsers  int
 	isPrivate bool
@@ -61,35 +62,37 @@ func (p *party) Start() {
 			view := p.ToView()
 			for user := range p.users {
 				id := ""
+				act := ActionModifyParty
 				if user == req.User {
 					id = req.ID
+					act = ActionJoinParty
 				}
 				user.Send(EventMessage{
 					ID:     id,
-					Action: ActionJoinParty,
+					Action: act,
 					Status: StatusOK,
 					Param:  view,
 				})
 			}
-		case user := <-p.leave:
-			if _, ok := p.users[user]; !ok {
-				user.Send(EventMessage{
-					Action: ActionLeaveRoom,
-					Status: StatusNG,
-					Param:  struct{}{},
-				})
-				continue
+		case req := <-p.leave:
+			if _, ok := p.users[req.User]; ok {
+				delete(p.users, req.User)
 			}
-			delete(p.users, user)
-			user.Send(EventMessage{
-				Action: ActionLeaveRoom,
-				Status: StatusOK,
-				Param:  struct{}{},
-			})
+			if p.owner == req.User {
+				p.owner = nil
+				for user := range p.users {
+					p.owner = user
+					break
+				}
+			}
 		}
 	}
 }
 
 func (p *party) Join(req JoinPartyRequest) {
 	p.join <- req
+}
+
+func (p *party) Leave(req LeavePartyRequest) {
+	p.leave <- req
 }

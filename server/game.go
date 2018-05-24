@@ -20,7 +20,7 @@ type game struct {
 	removeParty    chan Party
 	addGameMode    chan GameMode
 	removeGameMode chan GameMode
-	users          map[User]struct{}
+	users          map[string]User
 	parties        map[string]Party
 	gameModes      map[string]GameMode
 }
@@ -42,7 +42,7 @@ func NewGame(gameModeList []GameMode) Game {
 		removeParty:    make(chan Party),
 		addGameMode:    make(chan GameMode),
 		removeGameMode: make(chan GameMode),
-		users:          map[User]struct{}{},
+		users:          map[string]User{},
 		parties:        map[string]Party{},
 		gameModes:      gameModes,
 	}
@@ -72,14 +72,14 @@ func (g *game) start() {
 	for {
 		select {
 		case user := <-g.joinUser:
-			g.users[user] = struct{}{}
+			g.users[user.GetID()] = user
 			user.Send(EventMessage{
 				Action: ActionJoinUserToRobby,
 				Status: StatusOK,
 				Param:  user.ToView(),
 			})
 		case user := <-g.leaveUser:
-			delete(g.users, user)
+			delete(g.users, user.GetID())
 		case req := <-g.createParty:
 			id := uuid.NewV4().String()
 			party := &party{
@@ -88,7 +88,7 @@ func (g *game) start() {
 				maxUsers:  req.MaxUsers,
 				isPrivate: req.IsPrivate,
 				join:      make(chan JoinPartyRequest),
-				leave:     make(chan User),
+				leave:     make(chan LeavePartyRequest),
 				users: map[User]struct{}{
 					req.User: struct{}{},
 				},
