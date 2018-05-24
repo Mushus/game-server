@@ -1,13 +1,17 @@
 package server
 
-import uuid "github.com/satori/go.uuid"
+import (
+	uuid "github.com/satori/go.uuid"
+)
 
+// Game ゲームです
 type Game interface {
+	JoinUser(user User)
+	LeaveUser(user User)
 	CreateParty() Party
 }
 
 type game struct {
-	id             string
 	joinUser       chan User
 	leaveUser      chan User
 	addParty       chan Party
@@ -19,16 +23,16 @@ type game struct {
 	gameModes      map[string]GameMode
 }
 
+// NewGame ゲームを作成します
+//
 func NewGame(gameModeList []GameMode) Game {
 	gameModes := map[string]GameMode{}
 	for _, gameMode := range gameModeList {
 		id := uuid.NewV4().String()
 		gameModes[id] = gameMode
 	}
-	id := uuid.NewV4().String()
 
 	return &game{
-		id:             id,
 		joinUser:       make(chan User),
 		leaveUser:      make(chan User),
 		addParty:       make(chan Party),
@@ -73,4 +77,12 @@ func (g *game) start() {
 			delete(g.gameModes, gameMode.GetID())
 		}
 	}
+}
+
+func (g *game) JoinUser(user User) {
+	g.joinUser <- user
+}
+
+func (g *game) LeaveUser(user User) {
+	g.leaveUser <- user
 }

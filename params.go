@@ -11,6 +11,8 @@ type RoomParam struct {
 }
 
 const (
+	// RecieveActionModifyUser ユーザーを変更する
+	RecieveActionModifyUser = "modify_user"
 	// ReceiveActionCreateParty パーティを作成する
 	ReceiveActionCreateParty = "create_party"
 	// ReceiveActionGetParty パーティを取得する
@@ -23,6 +25,9 @@ type ParamSocketReceive struct {
 	ID     string           `json:"id"`
 	Param  *json.RawMessage `json:"param"`
 }
+
+// ParamModifyUser ユーザーが更新された時のパラメータ
+type ParamModifyUser struct{}
 
 // ParamCreateParty パーティを作成する
 type ParamCreateParty struct {
@@ -73,6 +78,7 @@ var InvalidParameterErrorResponse = WebSocketResponse{
 	},
 }
 
+// PartyNotFoundErrorResponse パーティは存在しませんエラー
 var PartyNotFoundErrorResponse = WebSocketResponse{
 	Action: ReceiveActionCreateParty,
 	Status: ResponseStatusNG,

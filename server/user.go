@@ -1,14 +1,22 @@
 package server
 
-import "golang.org/x/net/websocket"
-
+// User ユーザーです
 type User interface {
 	Send(event Event)
 }
 
 type user struct {
-	ws    *websocket.Conn
+	name  string
 	event chan Event
+}
+
+// NewUser name のユーザーを作成します
+// event のチャンネルにユーザー宛のメッセージが送信されます
+func NewUser(name string, event chan Event) User {
+	return &user{
+		name:  name,
+		event: event,
+	}
 }
 
 func (u *user) Send(event Event) {
