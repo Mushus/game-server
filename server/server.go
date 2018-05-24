@@ -18,7 +18,9 @@ type server struct {
 
 // NewServer ゲームサーバーを作成します
 func NewServer() Server {
-	return &server{}
+	return &server{
+		games: map[string]Game{},
+	}
 }
 
 func (s *server) Start() {

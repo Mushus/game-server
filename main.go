@@ -31,7 +31,7 @@ func main() {
 	e.Use(middleware.CORS())
 	e.GET("/:gameID", Connect(srv))
 
-	e.Logger.Fatal(e.Start(":8090"))
+	e.Logger.Fatal(e.Start("localhost:8090"))
 }
 
 // Connect クライアントとの通信のエンドポイント
@@ -49,11 +49,11 @@ func Connect(srv server.Server) func(echo.Context) error {
 		}
 
 		// userName をリクエストから取り出す
-		userNameParam := c.Get("user_name")
-		userName, ok := userNameParam.(string)
-		if !ok || userName == "" {
+		userName := c.FormValue("userName")
+		log.Printf("%#v", userName)
+		if userName == "" {
 			return c.JSON(
-				http.StatusNotFound,
+				http.StatusBadRequest,
 				map[string]interface{}{
 					"message": "invalid or empty user name",
 				},
@@ -84,10 +84,26 @@ func Connect(srv server.Server) func(echo.Context) error {
 				log.Printf("rq: %#v", req)
 
 				switch req.Action {
-				case RecieveActionModifyUser:
-					param := &ParamModifyUser{}
+				case ReceiveActionCreateParty:
+					param := &ParamCreateParty{}
 					json.Unmarshal(*req.Param, &param)
-					log.Printf("%#v", param)
+					game.CreateParty(server.CreatePartyRequest{
+						ID:       req.ID,
+						User:     user,
+						MaxUsers: param.MaxUsers,
+					})
+					/*				case ReceiveActionModifyUser:
+									param := &ParamModifyUser{}
+									json.Unmarshal(*req.Param, &param)
+									log.Printf("%#v", param)*/
+				case ReceiveActionJoinPerty:
+					param := &ParamJoinPerty{}
+					json.Unmarshal(*req.Param, &param)
+					game.JoinParty(server.JoinPartyRequest{
+						ID:      req.ID,
+						User:    user,
+						PartyID: param.PartyID,
+					})
 				}
 			}
 		}).ServeHTTP(c.Response(), c.Request())

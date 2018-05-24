@@ -8,13 +8,15 @@ import (
 type Game interface {
 	JoinUser(user User)
 	LeaveUser(user User)
-	CreateParty() Party
+	CreateParty(req CreatePartyRequest)
+	JoinParty(req JoinPartyRequest)
 }
 
 type game struct {
 	joinUser       chan User
 	leaveUser      chan User
-	addParty       chan Party
+	createParty    chan CreatePartyRequest
+	joinParty      chan JoinPartyRequest
 	removeParty    chan Party
 	addGameMode    chan GameMode
 	removeGameMode chan GameMode
@@ -35,7 +37,8 @@ func NewGame(gameModeList []GameMode) Game {
 	return &game{
 		joinUser:       make(chan User),
 		leaveUser:      make(chan User),
-		addParty:       make(chan Party),
+		createParty:    make(chan CreatePartyRequest),
+		joinParty:      make(chan JoinPartyRequest),
 		removeParty:    make(chan Party),
 		addGameMode:    make(chan GameMode),
 		removeGameMode: make(chan GameMode),
@@ -45,15 +48,20 @@ func NewGame(gameModeList []GameMode) Game {
 	}
 }
 
-func (g *game) CreateParty() Party {
-	id := uuid.NewV4().String()
-	party := &party{
-		id:    id,
-		join:  make(chan User),
-		leave: make(chan User),
-	}
-	g.addParty <- party
-	return party
+func (g *game) CreateParty(req CreatePartyRequest) {
+	g.createParty <- req
+}
+
+func (g *game) JoinParty(req JoinPartyRequest) {
+	g.joinParty <- req
+}
+
+func (g *game) JoinUser(user User) {
+	g.joinUser <- user
+}
+
+func (g *game) LeaveUser(user User) {
+	g.leaveUser <- user
 }
 
 func (g *game) start() {
@@ -65,10 +73,46 @@ func (g *game) start() {
 		select {
 		case user := <-g.joinUser:
 			g.users[user] = struct{}{}
+			user.Send(EventMessage{
+				Action: ActionJoinUserToRobby,
+				Status: StatusOK,
+				Param:  user.ToView(),
+			})
 		case user := <-g.leaveUser:
 			delete(g.users, user)
-		case party := <-g.addParty:
+		case req := <-g.createParty:
+			id := uuid.NewV4().String()
+			party := &party{
+				id:        id,
+				owner:     req.User,
+				maxUsers:  req.MaxUsers,
+				isPrivate: req.IsPrivate,
+				join:      make(chan JoinPartyRequest),
+				leave:     make(chan User),
+				users: map[User]struct{}{
+					req.User: struct{}{},
+				},
+			}
 			g.parties[party.GetID()] = party
+			go party.Start()
+			req.User.Send(EventMessage{
+				ID:     req.ID,
+				Action: ActionCreateParty,
+				Status: StatusOK,
+				Param:  party.ToView(),
+			})
+		case req := <-g.joinParty:
+			party, ok := g.parties[req.PartyID]
+			if !ok {
+				req.User.Send(EventMessage{
+					ID:     req.ID,
+					Action: ActionJoinParty,
+					Status: StatusNG,
+					Param:  struct{}{},
+				})
+				continue
+			}
+			party.Join(req)
 		case party := <-g.removeParty:
 			delete(g.parties, party.GetID())
 		case gameMode := <-g.addGameMode:
@@ -77,12 +121,4 @@ func (g *game) start() {
 			delete(g.gameModes, gameMode.GetID())
 		}
 	}
-}
-
-func (g *game) JoinUser(user User) {
-	g.joinUser <- user
-}
-
-func (g *game) LeaveUser(user User) {
-	g.leaveUser <- user
 }

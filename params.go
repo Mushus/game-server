@@ -11,12 +11,14 @@ type RoomParam struct {
 }
 
 const (
-	// RecieveActionModifyUser ユーザーを変更する
-	RecieveActionModifyUser = "modify_user"
+	// ReceiveActionModifyUser ユーザーを変更する
+	ReceiveActionModifyUser = "modify_user"
 	// ReceiveActionCreateParty パーティを作成する
 	ReceiveActionCreateParty = "create_party"
 	// ReceiveActionGetParty パーティを取得する
 	ReceiveActionGetParty = "get_party"
+	// ReceiveActionJoinPerty パーティに参加依頼する
+	ReceiveActionJoinPerty = "join_party"
 )
 
 // ParamSocketReceive ソケットの取得する形式
@@ -31,8 +33,6 @@ type ParamModifyUser struct{}
 
 // ParamCreateParty パーティを作成する
 type ParamCreateParty struct {
-	// OwnerSdp WebRTC で接続する場合に必要な情報です
-	OwnerOffer string `json:"ownerOffer"`
 	// IsPrivate パーティに入れるかどうか
 	IsPrivate bool `json:"isPrivate"`
 	// maxUsers パーティの人数制限
@@ -42,6 +42,10 @@ type ParamCreateParty struct {
 // ParamGetParty パーティを取得する
 type ParamGetParty struct {
 	// PartyID パーティID
+	PartyID string `json:"partyId"`
+}
+
+type ParamJoinPerty struct {
 	PartyID string `json:"partyId"`
 }
 
