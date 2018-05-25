@@ -1,22 +1,51 @@
 package server
 
-// CreatePartyRequest パーティ作成リクエスト
-type CreatePartyRequest struct {
-	ID        string
-	User      User
-	IsPrivate bool
-	MaxUsers  int
+type createUserRequest struct {
+	resp     chan createUserResponse
+	userName string
+	event    chan EventMessage
 }
 
-// JoinPartyRequest パーティ参加リクエスト
-type JoinPartyRequest struct {
-	ID      string
-	User    User
-	PartyID string
+type createUserResponse struct {
+	user UserView
 }
 
-// LeavePartyRequest パーティから退室リクエスト
-type LeavePartyRequest struct {
-	ID   string
-	User User
+type leaveUserFromGameRequest struct {
+	resp   chan leaveUserFromGameResponse
+	userID string
+}
+
+type leaveUserFromGameResponse struct {
+}
+
+type createPartyRequest struct {
+	resp      chan createPartyResponse
+	userID    string
+	isPrivate bool
+	maxUsers  int
+}
+
+type createPartyResponse struct {
+	party  *PartyView
+	status bool
+}
+
+type joinPartyRequest struct {
+	resp    chan joinPartyResponse
+	userID  string
+	partyID string
+}
+
+type joinPartyResponse struct {
+	party  *PartyView
+	status bool
+}
+
+type leaveUserFromPartyRequest struct {
+	resp   chan leaveUserFromPartyResponse
+	userID string
+}
+
+type leaveUserFromPartyResponse struct {
+	status bool
 }

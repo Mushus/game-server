@@ -13,7 +13,6 @@ import (
 
 var (
 	robbyIDs = []string{"hoge"}
-	repo     Repository
 )
 
 func main() {
@@ -63,10 +62,10 @@ func Connect(srv server.Server) func(echo.Context) error {
 		websocket.Handler(func(ws *websocket.Conn) {
 			defer ws.Close()
 
-			event := make(chan server.Event)
-			user := server.NewUser(userName, event)
-			game.JoinUser(user)
-			defer game.LeaveUser(user)
+			event := make(chan server.EventMessage)
+			user := game.CreateUserRequest(userName, event)
+			userID := user.ID
+			defer game.LeaveUserFromGameRequest(userID)
 
 			// イベントを受け取って、レスポンスを返す
 			go func() {
@@ -76,40 +75,36 @@ func Connect(srv server.Server) func(echo.Context) error {
 			}()
 			// wsのリクエストを処理する
 			for {
-				req := ParamSocketReceive{}
+				req := &Request{}
 				err := websocket.JSON.Receive(ws, &req)
 				if err != nil {
 					return
 				}
 				log.Printf("rq: %#v", req)
 
+				var resp interface{}
+				status := false
 				switch req.Action {
-				case ReceiveActionCreateParty:
+				case ActionCreateParty:
 					param := &ParamCreateParty{}
 					json.Unmarshal(*req.Param, &param)
-					game.CreateParty(server.CreatePartyRequest{
-						ID:       req.ID,
-						User:     user,
-						MaxUsers: param.MaxUsers,
-					})
-					/*				case ReceiveActionModifyUser:
-									param := &ParamModifyUser{}
-									json.Unmarshal(*req.Param, &param)
-									log.Printf("%#v", param)*/
-				case ReceiveActionJoinPerty:
+					resp, status = game.CreatePartyRequest(userID, param.IsPrivate, param.MaxUsers)
+				case ActionJoinParty:
 					param := &ParamJoinPerty{}
 					json.Unmarshal(*req.Param, &param)
-					game.JoinParty(server.JoinPartyRequest{
-						ID:      req.ID,
-						User:    user,
-						PartyID: param.PartyID,
-					})
-				case ReceiveActionLeaveParty:
-					user.LeaveParty(server.LeavePartyRequest{
-						ID:   req.ID,
-						User: user,
-					})
+					resp, status = game.JoinPartyRequest(userID, param.PartyID)
+				case ActionLeaveUserFromParty:
+					status = game.LeaveUserFromPartyRequest(userID)
 				}
+				statusText := StatusNG
+				if status {
+					statusText = StatusOK
+				}
+				websocket.JSON.Send(ws, Response{
+					ID:     req.ID,
+					Status: statusText,
+					Param:  resp,
+				})
 			}
 		}).ServeHTTP(c.Response(), c.Request())
 		return nil

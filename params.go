@@ -2,36 +2,39 @@ package main
 
 import "encoding/json"
 
-// RoomParam TODO
-type RoomParam struct {
-	Name           string `json:"name"`
-	Password       string `json:"password"`
-	MaxUsers       int    `json:"maxUsers"`
-	IsAutoMatching bool   `json:"isAutoMatching"`
-}
+type status string
 
 const (
-	// ReceiveActionModifyUser ユーザーを変更する
-	ReceiveActionModifyUser = "modify_user"
-	// ReceiveActionCreateParty パーティを作成する
-	ReceiveActionCreateParty = "create_party"
-	// ReceiveActionGetParty パーティを取得する
-	ReceiveActionGetParty = "get_party"
-	// ReceiveActionJoinPerty パーティに参加依頼する
-	ReceiveActionJoinPerty = "join_party"
-	// ReceiveActionLeaveParty パーティに参加依頼する
-	ReceiveActionLeaveParty = "leave_party"
+	// StatusOK ok
+	StatusOK status = "ok"
+	// StatusNG ng
+	StatusNG status = "ng"
 )
 
-// ParamSocketReceive ソケットの取得する形式
-type ParamSocketReceive struct {
-	Action string           `json:"action"`
+type action string
+
+const (
+	// ActionCreateParty パーティ作成
+	ActionCreateParty action = "create_party"
+	// ActionJoinParty パーティに参加する
+	ActionJoinParty action = "join_party"
+	// ActionLeaveUserFromParty パーティから退出する
+	ActionLeaveUserFromParty action = "leave_user_from_party"
+)
+
+// Request websocket のリクエスト
+type Request struct {
 	ID     string           `json:"id"`
-	Param  *json.RawMessage `json:"param"`
+	Action action           `json:"action"`
+	Param  *json.RawMessage `json:param`
 }
 
-// ParamModifyUser ユーザーが更新された時のパラメータ
-type ParamModifyUser struct{}
+// Response websocket のレスポンス
+type Response struct {
+	ID     string      `json:"id"`
+	Status status      `json:"status"`
+	Param  interface{} `json:"param"`
+}
 
 // ParamCreateParty パーティを作成する
 type ParamCreateParty struct {
@@ -41,54 +44,7 @@ type ParamCreateParty struct {
 	MaxUsers int `json:"maxUsers"`
 }
 
-// ParamGetParty パーティを取得する
-type ParamGetParty struct {
-	// PartyID パーティID
-	PartyID string `json:"partyId"`
-}
-
+// ParamJoinPerty パーティに参加する
 type ParamJoinPerty struct {
 	PartyID string `json:"partyId"`
-}
-
-// ErrorResponse エラーレスポン
-// エラーの場合はこのjsonがパラメータとして返ります
-type ErrorResponse struct {
-	Message string `json:"message"`
-}
-
-// WebSocketResponse レスポンス
-type WebSocketResponse struct {
-	Action string                  `json:"action"`
-	Status WebScoketResponseStatus `json:"status"`
-	ID     string                  `json:"id"`
-	Param  interface{}             `json:"param"`
-}
-
-// WebScoketResponseStatus レスポンスのステータス
-type WebScoketResponseStatus string
-
-const (
-	// ResponseStatusOK 成功
-	ResponseStatusOK WebScoketResponseStatus = "ok"
-	// ResponseStatusNG 失敗
-	ResponseStatusNG WebScoketResponseStatus = "ng"
-)
-
-// InvalidParameterErrorResponse パラメータが間違ってるエラー
-var InvalidParameterErrorResponse = WebSocketResponse{
-	Action: ReceiveActionCreateParty,
-	Status: ResponseStatusNG,
-	Param: ErrorResponse{
-		Message: "invalid parameter",
-	},
-}
-
-// PartyNotFoundErrorResponse パーティは存在しませんエラー
-var PartyNotFoundErrorResponse = WebSocketResponse{
-	Action: ReceiveActionCreateParty,
-	Status: ResponseStatusNG,
-	Param: ErrorResponse{
-		Message: "party not found",
-	},
 }
