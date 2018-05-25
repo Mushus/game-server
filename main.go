@@ -74,6 +74,20 @@ func Connect(srv server.Server) func(echo.Context) error {
 							Event: EventModifyParty,
 							Param: r.Party,
 						})
+					case server.RequestP2PEvent:
+						websocket.JSON.Send(ws, Response{
+							Event: EventRequestP2P,
+							Param: EventParamRequestP2P{
+								Offer: r.Offer,
+							},
+						})
+					case server.ResponseP2PEvent:
+						websocket.JSON.Send(ws, Response{
+							Event: EventResponseP2P,
+							Param: EventParamResponseP2P{
+								Answer: r.Answer,
+							},
+						})
 					}
 				}
 			}()
@@ -98,6 +112,14 @@ func Connect(srv server.Server) func(echo.Context) error {
 					resp, status = game.JoinPartyRequest(userID, param.PartyID)
 				case ActionLeaveUserFromParty:
 					status = game.LeaveUserFromPartyRequest(userID)
+				case ActionRequestP2P:
+					param := &ParamRequestP2P{}
+					json.Unmarshal(*req.Param, &param)
+					status = game.RequestP2PRequest(userID, param.TargetID, param.Offer)
+				case ActionResponseP2P:
+					param := &ParamResponseP2P{}
+					json.Unmarshal(*req.Param, &param)
+					status = game.ResponseP2PRequest(userID, param.TargetID, param.Answer)
 				}
 				statusText := StatusNG
 				if status {

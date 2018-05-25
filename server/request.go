@@ -49,3 +49,25 @@ type leaveUserFromPartyRequest struct {
 type leaveUserFromPartyResponse struct {
 	status bool
 }
+
+type requestP2PRequest struct {
+	resp     chan requestP2PResponse
+	userID   string
+	targetID string
+	offer    string
+}
+
+type requestP2PResponse struct {
+	status bool
+}
+
+type responseP2PRequest struct {
+	resp     chan responseP2PResponse
+	userID   string
+	targetID string
+	answer   string
+}
+
+type responseP2PResponse struct {
+	status bool
+}

@@ -20,6 +20,10 @@ const (
 	ActionJoinParty action = "join_party"
 	// ActionLeaveUserFromParty パーティから退出する
 	ActionLeaveUserFromParty action = "leave_user_from_party"
+	// ActionRequestP2P p2p接続をリクエストする
+	ActionRequestP2P action = "request_p2p"
+	// ActionResponseP2P p2p接続に応答する
+	ActionResponseP2P action = "response_p2p"
 )
 
 type event string
@@ -27,7 +31,13 @@ type event string
 const (
 	// EventModifyParty パーティの変更を検知
 	EventModifyParty event = "modify_party"
+	// EventRequestP2P P2P接続要求検知
+	EventRequestP2P event = "request_p2p"
+	// EventResponseP2P P2P接続応答検知
+	EventResponseP2P event = "response_p2p"
 )
+
+// ===========================================================================
 
 // Request websocket のリクエスト
 type Request struct {
@@ -44,6 +54,9 @@ type Response struct {
 	Param  interface{} `json:"param"`
 }
 
+// ===========================================================================
+// RequestParam
+
 // ParamCreateParty パーティを作成する
 type ParamCreateParty struct {
 	// IsPrivate パーティに入れるかどうか
@@ -55,4 +68,31 @@ type ParamCreateParty struct {
 // ParamJoinPerty パーティに参加する
 type ParamJoinPerty struct {
 	PartyID string `json:"partyId"`
+}
+
+// ParamRequestP2P p2p接続をリクエストする
+type ParamRequestP2P struct {
+	UserID   string `json:"userId"`
+	TargetID string `json:"targetId"`
+	Offer    string `json:"offer"`
+}
+
+// ParamResponseP2P p2p接続に応答する
+type ParamResponseP2P struct {
+	UserID   string `json:"userId"`
+	TargetID string `json:"targetId"`
+	Answer   string `json:"Answer"`
+}
+
+// ===========================================================================
+// EventParam
+
+// EventParamRequestP2P p2p接続をリクエストする
+type EventParamRequestP2P struct {
+	Offer string `json:"offer"`
+}
+
+// EventParamResponseP2P p2p接続に応答する
+type EventParamResponseP2P struct {
+	Answer string `json:"Answer"`
 }

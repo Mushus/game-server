@@ -11,6 +11,8 @@ type Game interface {
 	CreatePartyRequest(userID string, isPrivate bool, maxUsers int) (*PartyView, bool)
 	JoinPartyRequest(userID string, partyID string) (*PartyView, bool)
 	LeaveUserFromPartyRequest(userID string) bool
+	RequestP2PRequest(userID string, targetID string, offer string) bool
+	ResponseP2PRequest(userID string, targetID string, answer string) bool
 }
 
 type game struct {
@@ -22,6 +24,8 @@ type game struct {
 	createPartyCh        chan createPartyRequest
 	joinPartyCh          chan joinPartyRequest
 	leaveUserFromPartyCh chan leaveUserFromPartyRequest
+	requestP2PCh         chan requestP2PRequest
+	responseP2PCh        chan responseP2PRequest
 }
 
 // NewGame ゲームを作成します
@@ -45,6 +49,8 @@ func NewGame(gameModeList []GameMode) Game {
 		createPartyCh:        make(chan createPartyRequest),
 		joinPartyCh:          make(chan joinPartyRequest),
 		leaveUserFromPartyCh: make(chan leaveUserFromPartyRequest),
+		requestP2PCh:         make(chan requestP2PRequest),
+		responseP2PCh:        make(chan responseP2PRequest),
 	}
 }
 
@@ -74,6 +80,16 @@ func (g *game) start() {
 		case req := <-g.leaveUserFromPartyCh:
 			status := g.leaveUserFromPartyAction(req.userID)
 			req.resp <- leaveUserFromPartyResponse{
+				status: status,
+			}
+		case req := <-g.requestP2PCh:
+			status := g.requestP2PAction(req.userID, req.targetID, req.offer)
+			req.resp <- requestP2PResponse{
+				status: status,
+			}
+		case req := <-g.responseP2PCh:
+			status := g.responseP2PAction(req.userID, req.targetID, req.answer)
+			req.resp <- responseP2PResponse{
 				status: status,
 			}
 		}
@@ -144,6 +160,42 @@ func (g *game) leaveUserFromPartyAction(userID string) bool {
 		return false
 	}
 	g.leaveUserFromParty(leaver)
+	return true
+}
+
+func (g *game) requestP2PAction(userID string, targetID string, offer string) bool {
+	_, ok := g.users[userID]
+	if !ok {
+		return false
+	}
+
+	target, ok := g.users[targetID]
+	if !ok {
+		return false
+	}
+
+	target.Send(RequestP2PEvent{
+		Offer:  offer,
+		UserID: userID,
+	})
+	return true
+}
+
+func (g *game) responseP2PAction(userID string, targetID string, answer string) bool {
+	_, ok := g.users[userID]
+	if !ok {
+		return false
+	}
+
+	target, ok := g.users[targetID]
+	if !ok {
+		return false
+	}
+
+	target.Send(ResponseP2PEvent{
+		Answer: answer,
+		UserID: userID,
+	})
 	return true
 }
 
@@ -251,6 +303,30 @@ func (g *game) LeaveUserFromPartyRequest(userID string) bool {
 	g.leaveUserFromPartyCh <- leaveUserFromPartyRequest{
 		resp:   respCh,
 		userID: userID,
+	}
+	resp := <-respCh
+	return resp.status
+}
+
+func (g *game) RequestP2PRequest(userID string, targetID string, offer string) bool {
+	respCh := make(chan requestP2PResponse)
+	g.requestP2PCh <- requestP2PRequest{
+		resp:     respCh,
+		userID:   userID,
+		targetID: targetID,
+		offer:    offer,
+	}
+	resp := <-respCh
+	return resp.status
+}
+
+func (g *game) ResponseP2PRequest(userID string, targetID string, answer string) bool {
+	respCh := make(chan responseP2PResponse)
+	g.responseP2PCh <- responseP2PRequest{
+		resp:     respCh,
+		userID:   userID,
+		targetID: targetID,
+		answer:   answer,
 	}
 	resp := <-respCh
 	return resp.status
