@@ -1,12 +1,11 @@
 package server
 
-type event string
+// ModifyPartyEvent パーティの更新
+type ModifyPartyEvent struct {
+	party PartyView
+}
 
-const ()
-
-// EventMessage イベントのメッセージ
-type EventMessage struct {
-	event  event
-	Status bool
-	Param  interface{}
+// LeavePartyEvent パーティの退席
+type LeavePartyEvent struct {
+	party PartyView
 }

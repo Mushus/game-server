@@ -3,7 +3,7 @@ package server
 type createUserRequest struct {
 	resp     chan createUserResponse
 	userName string
-	event    chan EventMessage
+	event    chan interface{}
 }
 
 type createUserResponse struct {

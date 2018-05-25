@@ -6,7 +6,7 @@ import (
 
 // Game ゲームです
 type Game interface {
-	CreateUserRequest(userName string, event chan EventMessage) UserView
+	CreateUserRequest(userName string, event chan interface{}) UserView
 	LeaveUserFromGameRequest(userID string)
 	CreatePartyRequest(userID string, isPrivate bool, maxUsers int) (*PartyView, bool)
 	JoinPartyRequest(userID string, partyID string) (*PartyView, bool)
@@ -14,14 +14,14 @@ type Game interface {
 }
 
 type game struct {
-	users              map[string]*user
-	parties            map[string]*party
-	gameModes          map[string]*gameMode
-	createUser         chan createUserRequest
-	leaveUserFromGame  chan leaveUserFromGameRequest
-	createParty        chan createPartyRequest
-	joinParty          chan joinPartyRequest
-	leaveUserFromParty chan leaveUserFromPartyRequest
+	users                map[string]*user
+	parties              map[string]*party
+	gameModes            map[string]*gameMode
+	createUserCh         chan createUserRequest
+	leaveUserFromGameCh  chan leaveUserFromGameRequest
+	createPartyCh        chan createPartyRequest
+	joinPartyCh          chan joinPartyRequest
+	leaveUserFromPartyCh chan leaveUserFromPartyRequest
 }
 
 // NewGame ゲームを作成します
@@ -37,39 +37,41 @@ func NewGame(gameModeList []GameMode) Game {
 	}
 
 	return &game{
-		users:             map[string]*user{},
-		parties:           map[string]*party{},
-		gameModes:         gameModes,
-		createUser:        make(chan createUserRequest),
-		leaveUserFromGame: make(chan leaveUserFromGameRequest),
-		createParty:       make(chan createPartyRequest),
+		users:                map[string]*user{},
+		parties:              map[string]*party{},
+		gameModes:            gameModes,
+		createUserCh:         make(chan createUserRequest),
+		leaveUserFromGameCh:  make(chan leaveUserFromGameRequest),
+		createPartyCh:        make(chan createPartyRequest),
+		joinPartyCh:          make(chan joinPartyRequest),
+		leaveUserFromPartyCh: make(chan leaveUserFromPartyRequest),
 	}
 }
 
 func (g *game) start() {
 	for {
 		select {
-		case req := <-g.createUser:
+		case req := <-g.createUserCh:
 			user := g.createUserAction(req.userName, req.event)
 			req.resp <- createUserResponse{
 				user: user,
 			}
-		case req := <-g.leaveUserFromGame:
+		case req := <-g.leaveUserFromGameCh:
 			g.leaveUserFromGameAction(req.userID)
 			req.resp <- leaveUserFromGameResponse{}
-		case req := <-g.createParty:
+		case req := <-g.createPartyCh:
 			party, status := g.createPartyAction(req.userID, req.isPrivate, req.maxUsers)
 			req.resp <- createPartyResponse{
 				party:  party,
 				status: status,
 			}
-		case req := <-g.joinParty:
+		case req := <-g.joinPartyCh:
 			party, status := g.joinPartyAction(req.userID, req.partyID)
 			req.resp <- joinPartyResponse{
 				party:  party,
 				status: status,
 			}
-		case req := <-g.leaveUserFromParty:
+		case req := <-g.leaveUserFromPartyCh:
 			status := g.leaveUserFromPartyAction(req.userID)
 			req.resp <- leaveUserFromPartyResponse{
 				status: status,
@@ -81,7 +83,7 @@ func (g *game) start() {
 // ===========================================================================
 // サーバーの動作
 
-func (g *game) createUserAction(userName string, event chan EventMessage) UserView {
+func (g *game) createUserAction(userName string, event chan interface{}) UserView {
 	id := uuid.NewV4().String()
 	user := &user{
 		id:    id,
@@ -100,6 +102,9 @@ func (g *game) createPartyAction(userID string, isPrivate bool, maxUsers int) (*
 	owner, ok := g.users[userID]
 	if !ok {
 		return nil, false
+	}
+	if owner.party != nil {
+		g.leaveUserFromParty(owner)
 	}
 	id := uuid.NewV4().String()
 	party := &party{
@@ -125,6 +130,11 @@ func (g *game) joinPartyAction(userID string, partyID string) (*PartyView, bool)
 		return nil, false
 	}
 
+	// すでにパーティにいる場合は退席
+	if rookie.party != nil {
+		g.leaveUserFromParty(rookie)
+	}
+
 	targetParty.users[userID] = rookie
 	rookie.party = targetParty
 	// TODO: ModifyParty
@@ -137,28 +147,66 @@ func (g *game) leaveUserFromPartyAction(userID string) bool {
 	if !ok {
 		return false
 	}
+	g.leaveUserFromParty(leaver)
+	return true
+}
 
-	party := leaver.party
-	delete(party.users, userID)
+// ===========================================================================
+// 共通操作
+
+func (g *game) joinParty(user *user, party *party) {
+	// すでにパーティにいる場合は退席
+	if user.party != nil {
+		g.leaveUserFromParty(user)
+	}
+
+	users := party.users
+	// パーティに参加
+	party.users[user.id] = user
+	user.party = party
+
+	// 変更を通知
+	pv := party.ToView()
+	for _, member := range users {
+		m := member
+		m.Send(ModifyPartyEvent{
+			party: pv,
+		})
+	}
+}
+
+func (g *game) leaveUserFromParty(user *user) {
+	party := user.party
+
+	// paryから退出
+	delete(party.users, user.id)
+	// 人がいないパーティは破棄
 	if len(party.users) == 0 {
 		delete(g.parties, party.id)
 	}
-	if party.owner.id == userID {
+	if party.owner.id == user.id {
 		party.owner = nil
 		for _, member := range party.users {
 			party.owner = member
 			break
 		}
 	}
-	return true
+	// パーティ変更を通知
+	pv := party.ToView()
+	for _, member := range party.users {
+		m := member
+		go m.Send(ModifyPartyEvent{
+			party: pv,
+		})
+	}
 }
 
 // ===========================================================================
 // サーバーに対するリクエスト
 
-func (g *game) CreateUserRequest(userName string, event chan EventMessage) UserView {
+func (g *game) CreateUserRequest(userName string, event chan interface{}) UserView {
 	respCh := make(chan createUserResponse)
-	g.createUser <- createUserRequest{
+	g.createUserCh <- createUserRequest{
 		resp:     respCh,
 		userName: userName,
 		event:    event,
@@ -169,7 +217,7 @@ func (g *game) CreateUserRequest(userName string, event chan EventMessage) UserV
 
 func (g *game) LeaveUserFromGameRequest(userID string) {
 	respCh := make(chan leaveUserFromGameResponse)
-	g.leaveUserFromGame <- leaveUserFromGameRequest{
+	g.leaveUserFromGameCh <- leaveUserFromGameRequest{
 		resp:   respCh,
 		userID: userID,
 	}
@@ -178,7 +226,7 @@ func (g *game) LeaveUserFromGameRequest(userID string) {
 
 func (g *game) CreatePartyRequest(userID string, isPrivate bool, maxUsers int) (*PartyView, bool) {
 	respCh := make(chan createPartyResponse)
-	g.createParty <- createPartyRequest{
+	g.createPartyCh <- createPartyRequest{
 		resp:      respCh,
 		userID:    userID,
 		isPrivate: isPrivate,
@@ -190,7 +238,7 @@ func (g *game) CreatePartyRequest(userID string, isPrivate bool, maxUsers int) (
 
 func (g *game) JoinPartyRequest(userID string, partyID string) (*PartyView, bool) {
 	respCh := make(chan joinPartyResponse)
-	g.joinParty <- joinPartyRequest{
+	g.joinPartyCh <- joinPartyRequest{
 		resp:    respCh,
 		userID:  userID,
 		partyID: partyID,
@@ -201,7 +249,7 @@ func (g *game) JoinPartyRequest(userID string, partyID string) (*PartyView, bool
 
 func (g *game) LeaveUserFromPartyRequest(userID string) bool {
 	respCh := make(chan leaveUserFromPartyResponse)
-	g.leaveUserFromParty <- leaveUserFromPartyRequest{
+	g.leaveUserFromPartyCh <- leaveUserFromPartyRequest{
 		resp:   respCh,
 		userID: userID,
 	}

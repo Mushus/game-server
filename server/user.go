@@ -4,7 +4,7 @@ type user struct {
 	id    string
 	name  string
 	party *party
-	event chan EventMessage
+	event chan interface{}
 }
 
 // UserView jsonに変換するためのユーザー情報
@@ -19,6 +19,6 @@ func (u *user) ToView() UserView {
 	}
 }
 
-func (u *user) Send(event EventMessage) {
+func (u *user) Send(event interface{}) {
 	u.event <- event
 }

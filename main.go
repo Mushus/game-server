@@ -62,7 +62,7 @@ func Connect(srv server.Server) func(echo.Context) error {
 		websocket.Handler(func(ws *websocket.Conn) {
 			defer ws.Close()
 
-			event := make(chan server.EventMessage)
+			event := make(chan interface{})
 			user := game.CreateUserRequest(userName, event)
 			userID := user.ID
 			defer game.LeaveUserFromGameRequest(userID)
