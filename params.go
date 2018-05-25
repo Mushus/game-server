@@ -22,6 +22,13 @@ const (
 	ActionLeaveUserFromParty action = "leave_user_from_party"
 )
 
+type event string
+
+const (
+	// EventModifyParty パーティの変更を検知
+	EventModifyParty event = "modify_party"
+)
+
 // Request websocket のリクエスト
 type Request struct {
 	ID     string           `json:"id"`
@@ -31,8 +38,9 @@ type Request struct {
 
 // Response websocket のレスポンス
 type Response struct {
-	ID     string      `json:"id"`
-	Status status      `json:"status"`
+	Event  event       `json:"event,omitempty"`
+	ID     string      `json:"id,omitempty"`
+	Status status      `json:"status,omitempty"`
 	Param  interface{} `json:"param"`
 }
 

@@ -95,7 +95,11 @@ func (g *game) createUserAction(userName string, event chan interface{}) UserVie
 }
 
 func (g *game) leaveUserFromGameAction(userID string) {
-	delete(g.users, userID)
+	user, ok := g.users[userID]
+	if ok {
+		g.leaveUserFromParty(user)
+		delete(g.users, userID)
+	}
 }
 
 func (g *game) createPartyAction(userID string, isPrivate bool, maxUsers int) (*PartyView, bool) {
@@ -103,18 +107,16 @@ func (g *game) createPartyAction(userID string, isPrivate bool, maxUsers int) (*
 	if !ok {
 		return nil, false
 	}
-	if owner.party != nil {
-		g.leaveUserFromParty(owner)
-	}
 	id := uuid.NewV4().String()
 	party := &party{
 		id:        id,
 		owner:     owner,
-		users:     map[string]*user{userID: owner},
+		users:     map[string]*user{},
 		maxUsers:  maxUsers,
 		isPrivate: isPrivate,
 	}
-	owner.party = party
+	g.parties[id] = party
+	g.joinParty(owner, party)
 	pv := party.ToView()
 	return &pv, true
 }
@@ -130,13 +132,7 @@ func (g *game) joinPartyAction(userID string, partyID string) (*PartyView, bool)
 		return nil, false
 	}
 
-	// すでにパーティにいる場合は退席
-	if rookie.party != nil {
-		g.leaveUserFromParty(rookie)
-	}
-
-	targetParty.users[userID] = rookie
-	rookie.party = targetParty
+	g.joinParty(rookie, targetParty)
 	// TODO: ModifyParty
 	pv := targetParty.ToView()
 	return &pv, true
@@ -154,23 +150,26 @@ func (g *game) leaveUserFromPartyAction(userID string) bool {
 // ===========================================================================
 // 共通操作
 
-func (g *game) joinParty(user *user, party *party) {
+func (g *game) joinParty(rookie *user, party *party) {
 	// すでにパーティにいる場合は退席
-	if user.party != nil {
-		g.leaveUserFromParty(user)
+	if rookie.party != nil {
+		g.leaveUserFromParty(rookie)
 	}
 
-	users := party.users
+	users := map[string]*user{}
+	for k, v := range party.users {
+		users[k] = v
+	}
 	// パーティに参加
-	party.users[user.id] = user
-	user.party = party
+	party.users[rookie.id] = rookie
+	rookie.party = party
 
 	// 変更を通知
 	pv := party.ToView()
 	for _, member := range users {
 		m := member
 		m.Send(ModifyPartyEvent{
-			party: pv,
+			Party: pv,
 		})
 	}
 }
@@ -196,7 +195,7 @@ func (g *game) leaveUserFromParty(user *user) {
 	for _, member := range party.users {
 		m := member
 		go m.Send(ModifyPartyEvent{
-			party: pv,
+			Party: pv,
 		})
 	}
 }

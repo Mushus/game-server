@@ -15,6 +15,7 @@ type UserView struct {
 
 func (u *user) ToView() UserView {
 	return UserView{
+		ID:   u.id,
 		Name: u.name,
 	}
 }

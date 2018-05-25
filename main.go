@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 
 	"github.com/Mushus/game-server/server"
@@ -49,7 +48,6 @@ func Connect(srv server.Server) func(echo.Context) error {
 
 		// userName をリクエストから取り出す
 		userName := c.FormValue("userName")
-		log.Printf("%#v", userName)
 		if userName == "" {
 			return c.JSON(
 				http.StatusBadRequest,
@@ -63,14 +61,20 @@ func Connect(srv server.Server) func(echo.Context) error {
 			defer ws.Close()
 
 			event := make(chan interface{})
+			defer close(event)
 			user := game.CreateUserRequest(userName, event)
 			userID := user.ID
 			defer game.LeaveUserFromGameRequest(userID)
-
 			// イベントを受け取って、レスポンスを返す
 			go func() {
 				for resp := range event {
-					websocket.JSON.Send(ws, resp)
+					switch r := resp.(type) {
+					case server.ModifyPartyEvent:
+						websocket.JSON.Send(ws, Response{
+							Event: EventModifyParty,
+							Param: r.Party,
+						})
+					}
 				}
 			}()
 			// wsのリクエストを処理する
@@ -78,9 +82,8 @@ func Connect(srv server.Server) func(echo.Context) error {
 				req := &Request{}
 				err := websocket.JSON.Receive(ws, &req)
 				if err != nil {
-					return
+					break
 				}
-				log.Printf("rq: %#v", req)
 
 				var resp interface{}
 				status := false
