@@ -1,6 +1,8 @@
 package main
 
-import "encoding/json"
+import (
+	"encoding/json"
+)
 
 type status string
 
@@ -29,6 +31,8 @@ const (
 type event string
 
 const (
+	// EventCreateUser ユーザーを作成する
+	EventCreateUser event = "create_user"
 	// EventModifyParty パーティの変更を検知
 	EventModifyParty event = "modify_party"
 	// EventRequestP2P P2P接続要求検知
@@ -72,16 +76,14 @@ type ParamJoinPerty struct {
 
 // ParamRequestP2P p2p接続をリクエストする
 type ParamRequestP2P struct {
-	UserID   string `json:"userId"`
-	TargetID string `json:"targetId"`
-	Offer    string `json:"offer"`
+	UserID string `json:"userId"`
+	Offer  string `json:"offer"`
 }
 
 // ParamResponseP2P p2p接続に応答する
 type ParamResponseP2P struct {
-	UserID   string `json:"userId"`
-	TargetID string `json:"targetId"`
-	Answer   string `json:"Answer"`
+	UserID string `json:"userId"`
+	Answer string `json:"Answer"`
 }
 
 // ===========================================================================
@@ -89,10 +91,12 @@ type ParamResponseP2P struct {
 
 // EventParamRequestP2P p2p接続をリクエストする
 type EventParamRequestP2P struct {
-	Offer string `json:"offer"`
+	UserID string `json:"userId"`
+	Offer  string `json:"offer"`
 }
 
 // EventParamResponseP2P p2p接続に応答する
 type EventParamResponseP2P struct {
-	Answer string `json:"Answer"`
+	UserID string `json:"userId"`
+	Answer string `json:"answer"`
 }

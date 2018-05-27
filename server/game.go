@@ -242,13 +242,18 @@ func (g *game) leaveUserFromParty(user *user) {
 			break
 		}
 	}
-	// パーティ変更を通知
-	pv := party.ToView()
-	for _, member := range party.users {
-		m := member
-		go m.Send(ModifyPartyEvent{
-			Party: pv,
-		})
+
+	// NOTE: パーティに人が居ない場合、余計な処理する必要がない
+	// というか owner の取得で nil pointer dereference になる
+	if len(party.users) != 0 {
+		// パーティ変更を通知
+		pv := party.ToView()
+		for _, member := range party.users {
+			m := member
+			go m.Send(ModifyPartyEvent{
+				Party: pv,
+			})
+		}
 	}
 }
 

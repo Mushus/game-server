@@ -62,8 +62,15 @@ func Connect(srv server.Server) func(echo.Context) error {
 
 			event := make(chan interface{})
 			defer close(event)
+
 			user := game.CreateUserRequest(userName, event)
+			websocket.JSON.Send(ws, Response{
+				Event: EventCreateUser,
+				Param: user,
+			})
+
 			userID := user.ID
+
 			defer game.LeaveUserFromGameRequest(userID)
 			// イベントを受け取って、レスポンスを返す
 			go func() {
@@ -78,13 +85,15 @@ func Connect(srv server.Server) func(echo.Context) error {
 						websocket.JSON.Send(ws, Response{
 							Event: EventRequestP2P,
 							Param: EventParamRequestP2P{
-								Offer: r.Offer,
+								UserID: r.UserID,
+								Offer:  r.Offer,
 							},
 						})
 					case server.ResponseP2PEvent:
 						websocket.JSON.Send(ws, Response{
 							Event: EventResponseP2P,
 							Param: EventParamResponseP2P{
+								UserID: r.UserID,
 								Answer: r.Answer,
 							},
 						})
@@ -115,11 +124,11 @@ func Connect(srv server.Server) func(echo.Context) error {
 				case ActionRequestP2P:
 					param := &ParamRequestP2P{}
 					json.Unmarshal(*req.Param, &param)
-					status = game.RequestP2PRequest(userID, param.TargetID, param.Offer)
+					status = game.RequestP2PRequest(userID, param.UserID, param.Offer)
 				case ActionResponseP2P:
 					param := &ParamResponseP2P{}
 					json.Unmarshal(*req.Param, &param)
-					status = game.ResponseP2PRequest(userID, param.TargetID, param.Answer)
+					status = game.ResponseP2PRequest(userID, param.UserID, param.Answer)
 				}
 				statusText := StatusNG
 				if status {
